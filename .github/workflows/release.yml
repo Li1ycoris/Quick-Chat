@@ -68,8 +68,6 @@ jobs:
 
           codesign --verify --strict --deep --verbose=2 "$APP"
           codesign -dv "$APP" 2>&1 | grep '^Signature=adhoc'
-          ents="$(codesign -d --entitlements - --xml "$APP")"
-          for e in audio-input camera; do grep -q "com.apple.security.device.$e" <<<"$ents" || { echo "::error::missing entitlement $e"; exit 1; }; done
 
           archs="$(lipo -archs "$EXE")"; echo "archs: $archs"
           [[ " $archs " == *" arm64 "* && " $archs " == *" x86_64 "* ]] || { echo "::error::not universal: $archs"; exit 1; }

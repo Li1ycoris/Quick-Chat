@@ -54,9 +54,6 @@ cat > "${APP}/Contents/Info.plist" <<PLIST
   <key>LSMinimumSystemVersion</key><string>14.0</string>
   <key>LSUIElement</key><true/>
   <key>NSHighResolutionCapable</key><true/>
-  <key>NSMicrophoneUsageDescription</key><string>${APP_NAME} uses the microphone for ChatGPT voice input.</string>
-  <key>NSCameraUsageDescription</key><string>${APP_NAME} uses the camera when you take a photo or share video in ChatGPT.</string>
-  <key>NSDownloadsFolderUsageDescription</key><string>${APP_NAME} saves files you download from ChatGPT to your Downloads folder.</string>
 </dict>
 </plist>
 PLIST

@@ -42,7 +42,7 @@ Two features, both off until you turn them on from the menu-bar icon. Your choic
 - It stays on top of other windows and doesn't hide when you click elsewhere. The shortcut, Esc, ⌘W or the close button hides it.
 - Reopening the panel returns to the conversation you left. Press ⇧⌘O for a new chat.
 - Sign in once inside the panel. **Sign Out of Quick Chat** clears the panel's website data.
-- Voice works; macOS asks for microphone access the first time.
+- Text-only by design: file attachments, downloads, and voice/camera input are all disabled, so Quick Chat stays a lightweight place to type.
 - It doesn't need the ChatGPT desktop app. If the new app isn't installed, the Show Mini options are simply unavailable and the rest works the same.
 
 #### ChatGPT's own keyboard shortcuts work too
@@ -54,7 +54,6 @@ chatgpt.com has built-in keyboard shortcuts, and they all reach the panel. Toget
 | ⌘K | Switch chat (search your chats) |
 | ⇧⌘O | New chat |
 | ⇧⌘S | Toggle sidebar |
-| ⌘U | Attach files |
 | ⇧⌘⌫ | Delete chat |
 | ⌘/ | Show all shortcuts (and change them) |
 
@@ -120,8 +119,7 @@ cd ~/Downloads && shasum -a 256 -c Quick-Chat-<version>.zip.sha256
 ```
 
 **Updating:** quit Quick Chat, replace the app in Applications with the new one, and repeat
-the Open Anyway step. See [Permissions](#permissions) for why macOS may ask for the
-microphone or camera again.
+the Open Anyway step.
 
 ### Build from source
 
@@ -153,21 +151,8 @@ Build options (environment variables for `make` or `scripts/build-app.sh`):
 
 ### Permissions
 
-Quick Chat needs no Accessibility or Automation access. macOS asks for the **microphone**
-the first time you use voice, and for the **camera** if you take a photo or share video.
-
-Release builds, and local builds without an Apple Development certificate, are signed
-ad-hoc. macOS identifies an ad-hoc app by the hash of its code, so after every update or
-rebuild it treats Quick Chat as a new app and may ask again. To clear stale entries:
-
-```sh
-tccutil reset Microphone dev.shuaibird.quickchat
-tccutil reset Camera dev.shuaibird.quickchat
-```
-
-If you build from source, signing with a free Apple Development certificate
-(Xcode → Settings → Accounts) keeps the grants across rebuilds. The build script picks it
-up automatically.
+Quick Chat is text-only and needs no system permissions at all: no Accessibility, no
+Automation, and no microphone or camera access.
 
 ## Limitations
 
@@ -177,7 +162,7 @@ up automatically.
 - You get the website's interface, not Classic's native chat UI. Your chats are regular ChatGPT conversations in your web history.
 - When chatgpt.com changes, the compact layout or focusing the message box can break.
 
-**Downloads and camera.** Files you download (generated images, exports) are saved straight to ~/Downloads and shown in Finder. Camera capture asks for macOS camera access the first time. Some cases may still fail, such as the right-click "Download Image" item, and `alert()`/`confirm()` dialogs from the site aren't shown.
+**Text-only.** Quick Chat is for typing: file attachments, downloads (generated images, exports), and voice/camera input are all disabled. If you need to attach or save a file, use ChatGPT in a full browser or the desktop app. `alert()`/`confirm()` dialogs from the site also aren't shown.
 
 **It depends on ChatGPT app internals.**
 - The Show Mini command id (`openAvatarOverlay`) is undocumented. A ChatGPT update may rename it, and the shortcut handling would stop working until Quick Chat is updated.
@@ -185,7 +170,7 @@ up automatically.
 
 **The usage benefit may not last.** Chat and Work are expected to move toward one experience. If that brings a shared allowance, Quick Chat loses its main advantage over Mini and becomes just a floating window.
 
-**Ad-hoc signed.** The release isn't signed with an Apple Developer ID or notarized. macOS treats each new build as a different app, so permissions such as microphone access must be granted again after every update.
+**Ad-hoc signed.** The release isn't signed with an Apple Developer ID or notarized, so macOS treats each new build as a different app and warns about it like any app downloaded from the internet.
 
 ## Privacy
 

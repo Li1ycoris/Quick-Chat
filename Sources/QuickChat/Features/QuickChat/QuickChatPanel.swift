@@ -16,8 +16,6 @@ final class QuickChatController: NSObject {
     private var panel: QuickChatPanel?
     private var webView: WKWebView?
     private var previousApp: NSRunningApplication?
-    /// Where each in-flight download is being written, for "reveal in Finder" when it finishes.
-    private var downloadDestinations: [ObjectIdentifier: URL] = [:]
 
     var isVisible: Bool { panel?.isVisible == true }
 
@@ -136,34 +134,10 @@ final class QuickChatController: NSObject {
         webView?.evaluateJavaScript("document.querySelector('#prompt-textarea')?.focus()")
     }
 
-    /// chatgpt.com or a subdomain of it (not e.g. "notchatgpt.com").
-    private static func isChatGPTHost(_ host: String) -> Bool {
-        let host = host.lowercased()
-        return host == "chatgpt.com" || host.hasSuffix(".chatgpt.com")
-    }
-
-    /// blob: and data: URLs are page-generated files (exports, images); they're saved, never shown.
+    /// blob: and data: URLs are page-generated files (exports, images). Quick Chat is text-only,
+    /// so these are neither shown nor saved — the navigation that would produce them is cancelled.
     private static func isGeneratedFile(_ url: URL?) -> Bool {
         url?.scheme == "blob" || url?.scheme == "data"
-    }
-
-    /// ~/Downloads/<name>, or "<name> 2", "<name> 3", … if that already exists (Finder-style).
-    private static func uniqueDownloadURL(suggestedFilename: String) -> URL {
-        let downloads = FileManager.default.urls(for: .downloadsDirectory, in: .userDomainMask)[0]
-        var name = (suggestedFilename as NSString).lastPathComponent
-            .replacingOccurrences(of: ":", with: "-")
-            .trimmingCharacters(in: .whitespacesAndNewlines)
-        if name.isEmpty || name.hasPrefix(".") { name = "download" + name }
-        let base = (name as NSString).deletingPathExtension
-        let ext = (name as NSString).pathExtension
-        var candidate = downloads.appendingPathComponent(name)
-        var n = 2
-        while FileManager.default.fileExists(atPath: candidate.path) {
-            let numbered = "\(base) \(n)" + (ext.isEmpty ? "" : ".\(ext)")
-            candidate = downloads.appendingPathComponent(numbered)
-            n += 1
-        }
-        return candidate
     }
 
     private static func staysInPanel(_ url: URL?) -> Bool {
@@ -174,14 +148,14 @@ final class QuickChatController: NSObject {
 
 // MARK: - WebKit delegates
 
-extension QuickChatController: WKUIDelegate, WKNavigationDelegate, WKDownloadDelegate {
-    /// `window.open` / target=_blank: sign-in pages stay in the panel, everything else goes to the browser.
+extension QuickChatController: WKUIDelegate, WKNavigationDelegate {
+    /// `window.open` / target=_blank: sign-in pages stay in the panel, everything else goes to the
+    /// browser. Generated-file popups (blob:/data:) are ignored — Quick Chat is text-only.
     func webView(_ webView: WKWebView, createWebViewWith configuration: WKWebViewConfiguration,
                  for navigationAction: WKNavigationAction, windowFeatures: WKWindowFeatures) -> WKWebView? {
         guard let url = navigationAction.request.url else { return nil }
         if Self.isGeneratedFile(url) {
-            // window.open(blob:/data:) would otherwise replace the chat in the panel.
-            webView.startDownload(using: navigationAction.request) { $0.delegate = self }
+            return nil
         } else if Self.staysInPanel(url) {
             webView.load(navigationAction.request)
         } else {
@@ -193,10 +167,10 @@ extension QuickChatController: WKUIDelegate, WKNavigationDelegate, WKDownloadDel
     func webView(_ webView: WKWebView, decidePolicyFor navigationAction: WKNavigationAction,
                  decisionHandler: @escaping @MainActor (WKNavigationActionPolicy) -> Void) {
         let url = navigationAction.request.url
-        // <a download>, blob:/data: links: save the file instead of navigating (checked first, as
-        // download links often point at file hosts that would otherwise open in the browser).
-        if navigationAction.shouldPerformDownload || (navigationAction.targetFrame?.isMainFrame == true && Self.isGeneratedFile(url)) {
-            decisionHandler(.download)
+        // Text-only: never download, and don't let an <a download> / blob: / data: navigation
+        // replace the chat in the panel — just cancel it.
+        if navigationAction.shouldPerformDownload || Self.isGeneratedFile(url) {
+            decisionHandler(.cancel)
             return
         }
         if navigationAction.targetFrame?.isMainFrame == true, navigationAction.navigationType == .linkActivated,
@@ -208,21 +182,14 @@ extension QuickChatController: WKUIDelegate, WKNavigationDelegate, WKDownloadDel
         decisionHandler(.allow)
     }
 
-    /// Responses the web view can't display, or that the server marks as attachments, are saved.
+    /// Text-only: responses the web view can't display, or that the server marks as attachments,
+    /// are cancelled rather than downloaded.
     func webView(_ webView: WKWebView, decidePolicyFor navigationResponse: WKNavigationResponse,
                  decisionHandler: @escaping @MainActor (WKNavigationResponsePolicy) -> Void) {
         let disposition = (navigationResponse.response as? HTTPURLResponse)?
             .value(forHTTPHeaderField: "Content-Disposition")?.lowercased()
         let isAttachment = disposition?.hasPrefix("attachment") == true
-        decisionHandler(!navigationResponse.canShowMIMEType || isAttachment ? .download : .allow)
-    }
-
-    func webView(_ webView: WKWebView, navigationAction: WKNavigationAction, didBecome download: WKDownload) {
-        download.delegate = self
-    }
-
-    func webView(_ webView: WKWebView, navigationResponse: WKNavigationResponse, didBecome download: WKDownload) {
-        download.delegate = self
+        decisionHandler(!navigationResponse.canShowMIMEType || isAttachment ? .cancel : .allow)
     }
 
     func webView(_ webView: WKWebView, didFinish navigation: WKNavigation!) {
@@ -236,47 +203,18 @@ extension QuickChatController: WKUIDelegate, WKNavigationDelegate, WKDownloadDel
         if webView.url != nil { webView.reload() } else { webView.load(URLRequest(url: Self.chatURL)) }
     }
 
+    /// Text-only: no file attachments, so the upload picker is declined outright.
     func webView(_ webView: WKWebView, runOpenPanelWith parameters: WKOpenPanelParameters,
                  initiatedByFrame frame: WKFrameInfo,
                  completionHandler: @escaping @MainActor ([URL]?) -> Void) {
-        guard let panel else { return completionHandler(nil) }
-        let open = NSOpenPanel()
-        open.allowsMultipleSelection = parameters.allowsMultipleSelection
-        open.canChooseDirectories = parameters.allowsDirectories
-        open.beginSheetModal(for: panel) { response in
-            completionHandler(response == .OK ? open.urls : nil)
-        }
+        completionHandler(nil)
     }
 
+    /// Text-only: no camera or microphone (voice / photo / video) capture.
     func webView(_ webView: WKWebView, requestMediaCapturePermissionFor origin: WKSecurityOrigin,
                  initiatedByFrame frame: WKFrameInfo, type: WKMediaCaptureType,
                  decisionHandler: @escaping @MainActor (WKPermissionDecision) -> Void) {
-        // Camera and microphone alike: WebKit asks the user (per page load) on chatgpt.com only.
-        // macOS's own TCC prompt also appears once per app (NSCamera/NSMicrophoneUsageDescription).
-        decisionHandler(origin.protocol == "https" && Self.isChatGPTHost(origin.host) ? .prompt : .deny)
-    }
-
-    // MARK: Downloads (WKDownloadDelegate)
-
-    /// Saves straight to ~/Downloads under a unique name (like Safari): no modal sheet on the
-    /// floating panel, which may be hidden by the time a slow download asks for a destination.
-    func download(_ download: WKDownload, decideDestinationUsing response: URLResponse,
-                  suggestedFilename: String, completionHandler: @escaping @MainActor (URL?) -> Void) {
-        let destination = Self.uniqueDownloadURL(suggestedFilename: suggestedFilename)
-        downloadDestinations[ObjectIdentifier(download)] = destination
-        log.info("Downloading to \(destination.path, privacy: .public)")
-        completionHandler(destination)
-    }
-
-    func downloadDidFinish(_ download: WKDownload) {
-        guard let destination = downloadDestinations.removeValue(forKey: ObjectIdentifier(download)) else { return }
-        NSWorkspace.shared.activateFileViewerSelecting([destination])
-    }
-
-    func download(_ download: WKDownload, didFailWithError error: Error, resumeData: Data?) {
-        downloadDestinations.removeValue(forKey: ObjectIdentifier(download))
-        log.error("Download failed: \(error.localizedDescription, privacy: .public)")
-        NSSound.beep()
+        decisionHandler(.deny)
     }
 }
 

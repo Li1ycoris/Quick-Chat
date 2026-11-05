@@ -149,11 +149,6 @@ If the user can't write to /Applications, use `make install PREFIX=~/Application
 `~/Applications/Quick Chat.app` instead. Self-built apps aren't quarantined, so there's no
 Gatekeeper prompt.
 
-**Optional: keep microphone and camera grants across rebuilds.** If the user signed in to
-Xcode with an Apple ID (Xcode → Settings → Accounts), they have a free Apple Development
-certificate and the build script uses it automatically. Without one the app is signed ad-hoc,
-and macOS may ask for microphone access again after every rebuild.
-
 **Updating later:** `git pull && make install` from the clone.
 
 Then continue with [First run](#first-run).
@@ -176,7 +171,8 @@ Tell the user:
    Quick Chat frees that shortcut automatically while it uses it, and offers
    **Restart ChatGPT to Apply**: ChatGPT only reads shortcut changes at launch. Quick Chat
    never restarts ChatGPT on its own. Quitting Quick Chat restores the original shortcut.
-6. The first time the user speaks to ChatGPT, macOS asks for microphone access. Allow it.
+6. Quick Chat is text-only: file attachments, downloads, and voice/camera input are disabled,
+   so macOS never asks for any permission.
 
 To launch it at login: **System Settings → General → Login Items → Open at Login → +**, then
 choose Quick Chat.
@@ -194,7 +190,6 @@ choose Quick Chat.
 | `swift build` fails with "Unknown error parsing property list" | Happens with the Command Line Tools alone. Install Xcode and select it (B1). |
 | `UNIVERSAL=1 make` fails | Universal builds need full Xcode, and a normal `make` is fine for one Mac. |
 | `swift: command not found` / `xcrun: error: invalid active developer path` | Developer tools are missing; see B1. |
-| Microphone or camera keeps being asked for after an update | Expected for ad-hoc-signed builds. To clear stale entries: `tccutil reset Microphone dev.shuaibird.quickchat` and `tccutil reset Camera dev.shuaibird.quickchat`. |
 | Want to remove it | Quit from the menu (this restores ChatGPT's shortcut), then delete `/Applications/Quick Chat.app` (or `make uninstall` in a clone). To also clear settings: `defaults delete dev.shuaibird.quickchat` and `rm -rf ~/Library/Application\ Support/ChatGPTCompanion`. |
 
 For anything else, point the user to the
